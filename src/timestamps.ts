@@ -1,38 +1,32 @@
 import { App, MarkdownView, setIcon } from "obsidian";
 import { parseTimestamp, createInlineTsRegex } from "./utils/time";
+import { CustomMediaPlayer } from "./custom-player";
 
 const SPEAKER_LINE_RE = /^(.+?)\s+((?:(?:\d{1,3}:)?\d{1,3}:\d{2}(?:\.\d{1,3})?))\s*$/;
 const INLINE_TS_RE = createInlineTsRegex();
 
-/** 时间戳渲染与播放状态管理 */
 export class TimestampManager {
+    private activeBtn: HTMLElement | null = null;
+    private activeMedia: HTMLMediaElement | null = null;
+    private activeContainer: HTMLElement | null = null;
+    private boundTimeUpdate: (() => void) | null = null;
+    private boundEnded: (() => void) | null = null;
+    private boundPause: (() => void) | null = null;
+
     constructor(private app: App) {}
 
     processTimestamps(el: HTMLElement) {
-        const paragraphs = el.querySelectorAll("p");
-
-        for (const p of Array.from(paragraphs)) {
-            const nodesToProcess: { node: Text; type: "speaker" | "inline"; match: RegExpMatchArray }[] = [];
-
-            for (const node of Array.from(p.childNodes)) {
-                if (node.nodeType !== Node.TEXT_NODE) continue;
-                const text = node.textContent?.trim() ?? "";
-                if (!text) continue;
-
+        for (const p of Array.from(el.querySelectorAll("p"))) {
+            const texts = Array.from(p.childNodes)
+                .filter(n => n.nodeType === Node.TEXT_NODE && (n.textContent?.trim() ?? "")) as Text[];
+            for (const node of texts.reverse()) {
+                const text = node.textContent!.trim();
                 const speakerMatch = text.match(SPEAKER_LINE_RE);
                 if (speakerMatch) {
-                    nodesToProcess.push({ node: node as Text, type: "speaker", match: speakerMatch });
+                    this.replaceSpeakerLine(node, speakerMatch);
                 } else if (INLINE_TS_RE.test(text)) {
                     INLINE_TS_RE.lastIndex = 0;
-                    nodesToProcess.push({ node: node as Text, type: "inline", match: [] as unknown as RegExpMatchArray });
-                }
-            }
-
-            for (const item of nodesToProcess.reverse()) {
-                if (item.type === "speaker") {
-                    this.replaceSpeakerLine(item.node, item.match);
-                } else {
-                    this.replaceInlineTimestamps(item.node);
+                    this.replaceInlineTimestamps(node);
                 }
             }
         }
@@ -74,14 +68,6 @@ export class TimestampManager {
         node.parentNode?.replaceChild(fragment, node);
     }
 
-    private activeBtn: HTMLElement | null = null;
-    private activeMedia: HTMLMediaElement | null = null;
-    private activeContainer: HTMLElement | null = null;
-    private boundTimeUpdate: (() => void) | null = null;
-    private boundEnded: (() => void) | null = null;
-    private boundPause: (() => void) | null = null;
-    private switching = false;
-
     private createTimestampBtn(timeStr: string, totalSeconds: number): HTMLSpanElement {
         const btn = createSpan({ cls: "tsp-timestamp" });
         btn.setAttribute("data-seconds", String(totalSeconds));
@@ -103,12 +89,11 @@ export class TimestampManager {
     }
 
     private togglePlay(btn: HTMLElement, seconds: number) {
-        // If clicking the active button, toggle pause/play
         if (this.activeBtn === btn && this.activeMedia) {
-            if (!this.activeMedia.paused) {
-                this.activeMedia.pause();
-            } else {
+            if (this.activeMedia.paused) {
                 this.activeMedia.play().catch(() => {});
+            } else {
+                this.activeMedia.pause();
             }
             return;
         }
@@ -120,63 +105,31 @@ export class TimestampManager {
         const media = this.findMediaForBtn(container, btn);
         if (!media) return;
 
-        // Detach old listeners before pausing to avoid stale callbacks
-        this.detachMediaListeners();
-        this.resetActiveBtn();
+        this.activateMedia(media, container);
 
-        // Pause previous media if different
-        this.switching = true;
-        if (this.activeMedia && this.activeMedia !== media && !this.activeMedia.paused) {
-            this.activeMedia.pause();
-        }
-        this.switching = false;
-
-        // Seek and play the matched media
         media.currentTime = Math.min(seconds, media.duration || Infinity);
         media.play().catch(() => {});
 
-        this.activeMedia = media;
-        this.activeContainer = container;
         this.setActiveBtn(btn);
-
-        // Attach listeners for follow-along and cleanup
-        this.boundTimeUpdate = () => this.onTimeUpdate();
-        this.boundEnded = () => this.clearPlaybackState();
-        this.boundPause = () => {
-            if (this.switching) return;
-            if (this.activeBtn) {
-                const icon = this.activeBtn.querySelector(".tsp-play-icon");
-                if (icon) setIcon(icon as HTMLElement, "play");
-            }
-        };
-        media.addEventListener("timeupdate", this.boundTimeUpdate);
-        media.addEventListener("ended", this.boundEnded);
-        media.addEventListener("pause", this.boundPause);
-        media.addEventListener("play", () => {
-            if (this.activeBtn) {
-                const icon = this.activeBtn.querySelector(".tsp-play-icon");
-                if (icon) setIcon(icon as HTMLElement, "pause");
-            }
-        });
     }
 
-    /** Find the media element that this button belongs to (the last audio or video element before it in document order) */
     private findMediaForBtn(container: HTMLElement, btn: HTMLElement): HTMLMediaElement | null {
-        const all = Array.from(container.querySelectorAll("audio, video, .tsp-timestamp"));
+        const all = container.querySelectorAll<HTMLElement>("audio, video, .tsp-timestamp");
         let lastMedia: HTMLMediaElement | null = null;
-        for (const el of all) {
+
+        for (const el of Array.from(all)) {
             if (el.tagName === "AUDIO" || el.tagName === "VIDEO") {
                 lastMedia = el as HTMLMediaElement;
-            } else if (el === btn) {
+            }
+            else if (el === btn) {
                 return lastMedia;
             }
         }
         return lastMedia;
     }
 
-    /** Get timestamp buttons that belong to the same audio and video section (between this media element and the next) */
     private getTimestampsForMedia(container: HTMLElement, media: HTMLMediaElement): HTMLElement[] {
-        const all = Array.from(container.querySelectorAll("audio, video, .tsp-timestamp"));
+        const all = Array.from(container.querySelectorAll<HTMLElement>("audio, video, .tsp-timestamp"));
         const mediaIndex = all.indexOf(media);
         if (mediaIndex === -1) return [];
 
@@ -189,17 +142,11 @@ export class TimestampManager {
         return result;
     }
 
-    private onTimeUpdate() {
-        if (!this.activeMedia || !this.activeContainer) return;
-        const currentTime = this.activeMedia.currentTime;
-
-        const buttons = this.getTimestampsForMedia(this.activeContainer, this.activeMedia)
-            .map((el) => ({
-                el,
-                seconds: parseFloat(el.getAttribute("data-seconds") || "0"),
-            }))
+    private findActiveTimestamp(container: HTMLElement, media: HTMLMediaElement, time?: number): HTMLElement | null {
+        const currentTime = time ?? media.currentTime;
+        const buttons = this.getTimestampsForMedia(container, media)
+            .map((el) => ({ el, seconds: parseFloat(el.getAttribute("data-seconds") || "0") }))
             .sort((a, b) => a.seconds - b.seconds);
-
         let target: HTMLElement | null = null;
         for (const b of buttons) {
             if (b.seconds <= currentTime) {
@@ -208,30 +155,32 @@ export class TimestampManager {
                 break;
             }
         }
+        return target;
+    }
 
+    private onTimeUpdate() {
+        if (!this.activeMedia || !this.activeContainer) return;
+        const target = this.findActiveTimestamp(this.activeContainer, this.activeMedia);
         if (target && target !== this.activeBtn) {
             this.setActiveBtn(target);
         }
     }
 
-    private setActiveBtn(btn: HTMLElement) {
-        if (this.activeBtn) {
-            const prevIcon = this.activeBtn.querySelector(".tsp-play-icon");
-            if (prevIcon) setIcon(prevIcon as HTMLElement, "play");
-            this.activeBtn.removeClass("tsp-active");
-        }
-        btn.addClass("tsp-active");
-        const icon = btn.querySelector(".tsp-play-icon");
-        if (icon) setIcon(icon as HTMLElement, "pause");
-        this.activeBtn = btn;
+    private setPlayIcon(icon: "play" | "pause") {
+        if (!this.activeBtn) return;
+        const el = this.activeBtn.querySelector(".tsp-play-icon");
+        if (el) setIcon(el as HTMLElement, icon);
     }
 
-    private resetActiveBtn() {
+    private setActiveBtn(btn?: HTMLElement | null) {
         if (this.activeBtn) {
-            const icon = this.activeBtn.querySelector(".tsp-play-icon");
-            if (icon) setIcon(icon as HTMLElement, "play");
+            this.setPlayIcon("play");
             this.activeBtn.removeClass("tsp-active");
-            this.activeBtn = null;
+        }
+        this.activeBtn = btn ?? null;
+        if (btn) {
+            btn.addClass("tsp-active");
+            this.setPlayIcon(this.activeMedia && !this.activeMedia.paused ? "pause" : "play");
         }
     }
 
@@ -246,10 +195,68 @@ export class TimestampManager {
         this.boundPause = null;
     }
 
-    clearPlaybackState() {
+    private releaseCurrentMedia() {
         this.detachMediaListeners();
-        this.resetActiveBtn();
+        this.setActiveBtn(null);
+    }
+
+    private bindMediaListeners(media: HTMLMediaElement) {
+        this.boundTimeUpdate = () => this.onTimeUpdate();
+        this.boundEnded = () => this.clearPlaybackState();
+        this.boundPause = () => this.setPlayIcon("play");
+        media.addEventListener("timeupdate", this.boundTimeUpdate);
+        media.addEventListener("ended", this.boundEnded);
+        media.addEventListener("pause", this.boundPause);
+        media.addEventListener("play", () => this.setPlayIcon("pause"));
+    }
+
+    clearPlaybackState() {
+        this.releaseCurrentMedia();
         this.activeMedia = null;
         this.activeContainer = null;
+    }
+
+    rewriteMediaElements(el: HTMLElement) {
+        const mediaElements = el.querySelectorAll<HTMLMediaElement>("audio, video");
+        for (const media of Array.from(mediaElements)) {
+            if (media.hasAttribute("data-custom-player")) continue;
+            media.setAttribute("data-custom-player", "true");
+            media.removeAttribute("controls");
+            const player = new CustomMediaPlayer(media, this.app);
+            player.build();
+
+            const container = media.closest('.custom-media-player');
+            if (container) {
+                container.addEventListener('media-play', () => {
+                    if (this.activeMedia !== media) this.switchToMedia(media);
+                    else this.setPlayIcon("pause");
+                });
+                container.addEventListener('media-pause', () => {
+                    if (this.activeMedia === media) this.setPlayIcon("play");
+                });
+            }
+        }
+    }
+
+    private activateMedia(media: HTMLMediaElement, container: HTMLElement | null) {
+        this.releaseCurrentMedia();
+
+        if (this.activeMedia && this.activeMedia !== media && !this.activeMedia.paused) {
+            this.activeMedia.pause();
+        }
+
+        this.activeMedia = media;
+        this.activeContainer = container;
+        this.bindMediaListeners(media);
+    }
+
+    private switchToMedia(media: HTMLMediaElement) {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        this.activateMedia(media, view?.containerEl || null);
+
+        if (this.activeContainer) {
+            const target = this.findActiveTimestamp(this.activeContainer, media);
+            if (target) this.setActiveBtn(target);
+        }
     }
 }

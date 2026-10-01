@@ -13,6 +13,7 @@ export default class TimestampPlayerPlugin extends Plugin {
             async (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
                 if (!(await this.hasMediaEmbed(ctx))) return;
                 this.timestampManager.processTimestamps(el);
+                this.timestampManager.rewriteMediaElements(el);
             }
         );
     }
