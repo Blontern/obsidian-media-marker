@@ -1,0 +1,43 @@
+.tsp-speaker {
+	font-weight: 600;
+}
+
+.tsp-timestamp {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	cursor: pointer;
+	padding: 1px 6px;
+	border-radius: 4px;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	transition: all 0.15s ease;
+	vertical-align: baseline;
+}
+
+.tsp-timestamp:hover {
+	color: var(--text-accent);
+	background-color: var(--background-modifier-hover);
+}
+
+.tsp-timestamp.tsp-active {
+	color: var(--text-accent);
+	background-color: var(--background-modifier-hover);
+}
+
+.tsp-play-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1em;
+	height: 1em;
+}
+
+.tsp-play-icon svg {
+	width: 100%;
+	height: 100%;
+}
+
+.tsp-time {
+	font-family: var(--font-monospace);
+}
