@@ -88,7 +88,7 @@ export class TimestampManager {
         return btn;
     }
 
-    private togglePlay(btn: HTMLElement, seconds: number) {
+    public togglePlay(btn: HTMLElement, seconds: number) {
         if (this.activeBtn === btn && this.activeMedia) {
             if (this.activeMedia.paused) {
                 this.activeMedia.play().catch(() => {});
