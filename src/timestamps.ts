@@ -1,10 +1,14 @@
 import { App, MarkdownView, setIcon } from "obsidian";
-import { parseTimestamp, createInlineTsRegex } from "./utils/time";
 import { StickyMediaManager } from "./sticky-media";
 import { CustomMediaPlayer } from "./custom-player";
+import { parseTimestamp, createInlineTsRegex } from "./utils/time";
+import { buildTimestampButton } from "./utils/ts-button";
 
 const SPEAKER_LINE_RE = /^(.+?)\s+((?:(?:\d{1,3}:)?\d{1,3}:\d{2}(?:\.\d{1,3})?))\s*$/;
 const INLINE_TS_RE = createInlineTsRegex();
+const SKIP_TAGS = new Set(["CODE", "PRE", "A", "SCRIPT", "STYLE"]);
+const CM_SPAN_RE = /(^|\s)cm-/;
+const MEDIA_SECTION_SELECTOR = "audio, video, .tsp-sticky-anchor, .tsp-timestamp";
 
 export class TimestampManager {
     private activeBtn: HTMLElement | null = null;
@@ -13,6 +17,7 @@ export class TimestampManager {
     private boundTimeUpdate: (() => void) | null = null;
     private boundEnded: (() => void) | null = null;
     private boundPause: (() => void) | null = null;
+    private boundPlay: (() => void) | null = null;
 
     constructor(
         private app: App,
@@ -46,7 +51,6 @@ export class TimestampManager {
     /** 递归收集元素下的文本节点，跳过语义元素和自身产物 */
     private collectTextNodes(el: HTMLElement): Text[] {
         const result: Text[] = [];
-        const SKIP_TAGS = new Set(["CODE", "PRE", "A", "SCRIPT", "STYLE"]);
 
         const walk = (node: Node) => {
             if (node.nodeType === Node.ELEMENT_NODE) {
@@ -124,27 +128,15 @@ export class TimestampManager {
 
     /** 判断节点是否为 CodeMirror 的装饰性 span（类名包含 cm- 前缀） */
     private isCmSpan(node: Node): node is HTMLElement {
-        return node instanceof HTMLElement && /(^|\s)cm-/.test(node.className);
+        return node instanceof HTMLElement && CM_SPAN_RE.test(node.className);
     }
 
     private createTimestampBtn(timeStr: string, totalSeconds: number): HTMLSpanElement {
-        const btn = createSpan({ cls: "tsp-timestamp" });
-        btn.setAttribute("data-seconds", String(totalSeconds));
-        btn.setAttribute("role", "button");
-        btn.setAttribute("aria-label", `Play from ${timeStr}`);
-
-        const icon = createSpan({ cls: "tsp-play-icon" });
-        setIcon(icon, "play");
-        btn.appendChild(icon);
-        btn.appendChild(createSpan({ cls: "tsp-time", text: timeStr }));
-
-        btn.addEventListener("click", (e) => {
+        return buildTimestampButton(timeStr, totalSeconds, (btn, e) => {
             e.preventDefault();
             e.stopPropagation();
             this.togglePlay(btn, totalSeconds);
         });
-
-        return btn;
     }
 
     public togglePlay(btn: HTMLElement, seconds: number) {
@@ -173,7 +165,7 @@ export class TimestampManager {
     }
 
     private findMediaForBtn(container: HTMLElement, btn: HTMLElement): HTMLMediaElement | null {
-        const all = container.querySelectorAll<HTMLElement>("audio, video, .tsp-sticky-anchor, .tsp-timestamp");
+        const all = container.querySelectorAll<HTMLElement>(MEDIA_SECTION_SELECTOR);
         let lastMedia: HTMLMediaElement | null = null;
 
         for (const el of Array.from(all)) {
@@ -196,7 +188,7 @@ export class TimestampManager {
 
     private getTimestampsForMedia(container: HTMLElement, media: HTMLMediaElement): HTMLElement[] {
         const representative = this.stickyManager.getAnchorForMedia(media) || media;
-        const all = container.querySelectorAll<HTMLElement>("audio, video, .tsp-sticky-anchor, .tsp-timestamp");
+        const all = container.querySelectorAll<HTMLElement>(MEDIA_SECTION_SELECTOR);
 
         let repIndex = -1;
         for (let i = 0; i < all.length; i++) {
@@ -227,17 +219,15 @@ export class TimestampManager {
         return result;
     }
 
-    private findActiveTimestamp(container: HTMLElement, media: HTMLMediaElement, time?: number): HTMLElement | null {
-        const currentTime = time ?? media.currentTime;
-        const buttons = this.getTimestampsForMedia(container, media)
-            .map((el) => ({ el, seconds: parseFloat(el.getAttribute("data-seconds") || "0") }))
-            .sort((a, b) => a.seconds - b.seconds);
+    private findActiveTimestamp(container: HTMLElement, media: HTMLMediaElement): HTMLElement | null {
+        const currentTime = media.currentTime;
         let target: HTMLElement | null = null;
-        for (const b of buttons) {
-            if (b.seconds <= currentTime) {
-                target = b.el;
-            } else {
-                break;
+        let targetSeconds = -Infinity;
+        for (const el of this.getTimestampsForMedia(container, media)) {
+            const seconds = parseFloat(el.getAttribute("data-seconds") || "0");
+            if (seconds <= currentTime && seconds > targetSeconds) {
+                target = el;
+                targetSeconds = seconds;
             }
         }
         return target;
@@ -274,10 +264,12 @@ export class TimestampManager {
             if (this.boundTimeUpdate) this.activeMedia.removeEventListener("timeupdate", this.boundTimeUpdate);
             if (this.boundEnded) this.activeMedia.removeEventListener("ended", this.boundEnded);
             if (this.boundPause) this.activeMedia.removeEventListener("pause", this.boundPause);
+            if (this.boundPlay) this.activeMedia.removeEventListener("play", this.boundPlay);
         }
         this.boundTimeUpdate = null;
         this.boundEnded = null;
         this.boundPause = null;
+        this.boundPlay = null;
     }
 
     private releaseCurrentMedia() {
@@ -289,10 +281,11 @@ export class TimestampManager {
         this.boundTimeUpdate = () => this.onTimeUpdate();
         this.boundEnded = () => this.clearPlaybackState();
         this.boundPause = () => this.setPlayIcon("play");
+        this.boundPlay = () => this.setPlayIcon("pause");
         media.addEventListener("timeupdate", this.boundTimeUpdate);
         media.addEventListener("ended", this.boundEnded);
         media.addEventListener("pause", this.boundPause);
-        media.addEventListener("play", () => this.setPlayIcon("pause"));
+        media.addEventListener("play", this.boundPlay);
     }
 
     clearPlaybackState() {

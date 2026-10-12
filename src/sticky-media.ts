@@ -40,7 +40,7 @@ function resolveWrapper(media: HTMLMediaElement, scrollEl: HTMLElement): HTMLEle
     return cand && scrollEl.contains(cand) ? cand : media;
 }
 
-interface MediaGroup { ctls: BaseController[]; }
+interface MediaGroup { ctls: BaseController[]; onScroll: () => void; }
 
 abstract class BaseController {
     protected attached = false;
@@ -296,10 +296,19 @@ export class StickyMediaManager {
     private timer: number | null = null;
     private readonly anchorMap = new Map<HTMLElement, HTMLMediaElement>();
     private readonly mediaMap = new WeakMap<HTMLMediaElement, HTMLElement>();
+    private enabled = true;
 
     constructor(private app: App) {}
 
     initialize() { this.startObs(); }
+
+    /** 启用/禁用吸附：禁用时销毁全部控制器，启用时重建并扫描 */
+    setEnabled(enabled: boolean) {
+        if (this.enabled === enabled) return;
+        this.enabled = enabled;
+        if (enabled) this.startObs();
+        else this.destroy();
+    }
 
     registerMediaAnchor(media: HTMLMediaElement, anchor: HTMLElement) {
         this.anchorMap.set(anchor, media);
@@ -313,15 +322,16 @@ export class StickyMediaManager {
     getAnchorForMedia(media: HTMLMediaElement): HTMLElement | null { return this.mediaMap.get(media) || null; }
 
     setupForElement(renderRoot: HTMLElement) {
+        if (!this.enabled) return;
         const ctx = findStickyMediaContext(renderRoot);
         if (!ctx) return;
         const { media, scrollEl, hostEl } = ctx;
 
         let g = this.groups.get(scrollEl);
         if (!g) {
-            g = { ctls: [] };
+            g = { ctls: [], onScroll: () => this.arbitrate(scrollEl) };
             this.groups.set(scrollEl, g);
-            scrollEl.addEventListener("scroll", () => this.arbitrate(scrollEl), { passive: true });
+            scrollEl.addEventListener("scroll", g.onScroll, { passive: true });
         }
 
         if (g.ctls.some(c => c.media === media)) return;
@@ -331,6 +341,7 @@ export class StickyMediaManager {
     }
 
     scan() {
+        if (!this.enabled) return;
         this.cleanup();
         for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
             const view = leaf.view;
@@ -350,7 +361,7 @@ export class StickyMediaManager {
             this.timer = null;
         }
         for (const [el, g] of this.groups) {
-            el.removeEventListener("scroll", () => {});
+            el.removeEventListener("scroll", g.onScroll);
             for (const c of g.ctls) c.destroy();
         }
         this.groups.clear();
@@ -448,7 +459,7 @@ export class StickyMediaManager {
         for (const [el, g] of this.groups) {
             if (!valid.has(el)) {
                 for (const c of g.ctls) c.destroy();
-                el.removeEventListener("scroll", () => {});
+                el.removeEventListener("scroll", g.onScroll);
                 this.groups.delete(el);
                 continue;
             }
@@ -463,7 +474,7 @@ export class StickyMediaManager {
                 c.destroy();
             }
             if (g.ctls.length === 0) {
-                el.removeEventListener("scroll", () => {});
+                el.removeEventListener("scroll", g.onScroll);
                 this.groups.delete(el);
             }
         }

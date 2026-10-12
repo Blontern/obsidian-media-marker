@@ -1,4 +1,4 @@
-import { Plugin, MarkdownPostProcessorContext, TFile } from "obsidian";
+import { Plugin, MarkdownView, MarkdownPostProcessorContext, TFile, setIcon } from "obsidian";
 import { StickyMediaManager } from "./sticky-media";
 import { TimestampManager } from "./timestamps";
 import { createLivePreviewTimestampExtension } from "./timestamps-live-preview";
@@ -9,6 +9,8 @@ export default class TimestampPlayerPlugin extends Plugin {
     private stickyManager: StickyMediaManager;
     private timestampManager: TimestampManager;
     private mediaObserver: MutationObserver | null = null;
+    private stickyEnabled = true;
+    private instrumentedViews = new WeakSet<MarkdownView>();
 
     onload() {
         this.stickyManager = new StickyMediaManager(this.app);
@@ -31,11 +33,15 @@ export default class TimestampPlayerPlugin extends Plugin {
         );
 
         this.registerEvent(
-            this.app.workspace.on("layout-change", () => this.stickyManager.scan())
+            this.app.workspace.on("layout-change", () => {
+                this.stickyManager.scan();
+                this.instrumentStickyToggle();
+            })
         );
 
         // 兜底：监听动态插入的媒体元素（覆盖实时预览路径）
         this.setupMediaObserver();
+        this.instrumentStickyToggle();
     }
 
     onunload() {
@@ -76,6 +82,32 @@ export default class TimestampPlayerPlugin extends Plugin {
         });
 
         this.mediaObserver.observe(root, { childList: true, subtree: true });
+    }
+
+    /** 为每个 markdown 视图头部（模式切换旁）添加吸附开关按钮 */
+    private instrumentStickyToggle() {
+        for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+            const view = leaf.view;
+            if (!(view instanceof MarkdownView) || this.instrumentedViews.has(view)) continue;
+            this.instrumentedViews.add(view);
+            const btn = view.addAction(
+                this.stickyEnabled ? "pin" : "pin-off",
+                this.stickyEnabled ? "禁用媒体吸附" : "启用媒体吸附",
+                () => this.toggleSticky()
+            );
+            btn.setAttribute("data-tsp-sticky-toggle", "");
+        }
+    }
+
+    private toggleSticky() {
+        this.stickyEnabled = !this.stickyEnabled;
+        this.stickyManager.setEnabled(this.stickyEnabled);
+        const title = this.stickyEnabled ? "禁用媒体吸附" : "启用媒体吸附";
+        for (const btn of Array.from(document.querySelectorAll<HTMLElement>(".view-action[data-tsp-sticky-toggle]"))) {
+            setIcon(btn, this.stickyEnabled ? "pin" : "pin-off");
+            btn.setAttribute("aria-label", title);
+            btn.title = title;
+        }
     }
 
     private async hasMediaEmbed(ctx: MarkdownPostProcessorContext): Promise<boolean> {

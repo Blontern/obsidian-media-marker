@@ -1,11 +1,12 @@
-import { App, setIcon } from "obsidian";
-import { parseTimestamp, createInlineTsRegex } from "./utils/time";
+import { App } from "obsidian";
 import {
     EditorView, ViewPlugin, ViewUpdate, Decoration, DecorationSet,
     WidgetType, MatchDecorator,
 } from "@codemirror/view";
 import { Prec } from "@codemirror/state";
 import { TimestampManager } from "./timestamps";
+import { parseTimestamp, createInlineTsRegex } from "./utils/time";
+import { buildTimestampButton } from "./utils/ts-button";
 
 class TimestampWidget extends WidgetType {
     constructor(
@@ -22,23 +23,11 @@ class TimestampWidget extends WidgetType {
     }
 
     toDOM(_view: EditorView): HTMLElement {
-        const btn = createSpan({ cls: "tsp-timestamp" });
-        btn.setAttribute("data-seconds", String(this.totalSeconds));
-        btn.setAttribute("role", "button");
-        btn.setAttribute("aria-label", `Play from ${this.timeStr}`);
-
-        const icon = createSpan({ cls: "tsp-play-icon" });
-        setIcon(icon, "play");
-        btn.appendChild(icon);
-        btn.appendChild(createSpan({ cls: "tsp-time", text: this.timeStr }));
-
-        btn.addEventListener("click", (e) => {
+        return buildTimestampButton(this.timeStr, this.totalSeconds, (btn, e) => {
             e.preventDefault();
             e.stopPropagation();
             this.manager.togglePlay(btn, this.totalSeconds);
         });
-
-        return btn;
     }
 
     ignoreEvent(): boolean {
@@ -52,7 +41,7 @@ export function createLivePreviewTimestampExtension(app: App, manager: Timestamp
         decorate: (add, from, to, match, view) => {
             const cursor = view.state.selection.main;
 
-            // 关键改动：光标所在整行回退为源码
+            // 光标所在整行回退为源码
             const line = view.state.doc.lineAt(from);
             if (cursor.from <= line.to && cursor.to >= line.from) return;
 
