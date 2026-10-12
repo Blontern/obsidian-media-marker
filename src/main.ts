@@ -1,15 +1,19 @@
 import { Plugin, MarkdownPostProcessorContext, TFile } from "obsidian";
+import { StickyMediaManager } from "./sticky-media";
 import { TimestampManager } from "./timestamps";
 import { createLivePreviewTimestampExtension } from "./timestamps-live-preview";
 
 const MEDIA_EMBED_RE = /!\[\[.+?\.(mp3|webm|wav|m4a|ogg|3gp|flac|mp4|mov|avi|mkv|mpeg)\]\]/i;
 
 export default class TimestampPlayerPlugin extends Plugin {
+    private stickyManager: StickyMediaManager;
     private timestampManager: TimestampManager;
     private mediaObserver: MutationObserver | null = null;
 
     onload() {
-        this.timestampManager = new TimestampManager(this.app);
+        this.stickyManager = new StickyMediaManager(this.app);
+        this.stickyManager.initialize();
+        this.timestampManager = new TimestampManager(this.app, this.stickyManager);
 
         // 阅读模式 / 嵌入块的常规路径
         this.registerMarkdownPostProcessor(
@@ -17,6 +21,7 @@ export default class TimestampPlayerPlugin extends Plugin {
                 if (!(await this.hasMediaEmbed(ctx))) return;
                 this.timestampManager.processTimestamps(el);
                 this.timestampManager.rewriteMediaElements(el);
+                this.stickyManager.setupForElement(el);
             }
         );
 
@@ -25,12 +30,17 @@ export default class TimestampPlayerPlugin extends Plugin {
             createLivePreviewTimestampExtension(this.app, this.timestampManager)
         );
 
+        this.registerEvent(
+            this.app.workspace.on("layout-change", () => this.stickyManager.scan())
+        );
+
         // 兜底：监听动态插入的媒体元素（覆盖实时预览路径）
         this.setupMediaObserver();
     }
 
     onunload() {
         this.timestampManager.clearPlaybackState();
+        this.stickyManager.destroy();
         this.mediaObserver?.disconnect();
         this.mediaObserver = null;
     }
@@ -61,6 +71,7 @@ export default class TimestampPlayerPlugin extends Plugin {
                 if (!media.closest(".markdown-preview-view, .cm-scroller")) continue;
                 // 已被包装过的会因属性检查跳过
                 this.timestampManager.wrapMediaElement(media);
+                this.stickyManager.setupForElement(media);
             }
         });
 

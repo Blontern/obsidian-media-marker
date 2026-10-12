@@ -1,5 +1,6 @@
 import { App, MarkdownView, setIcon } from "obsidian";
 import { parseTimestamp, createInlineTsRegex } from "./utils/time";
+import { StickyMediaManager } from "./sticky-media";
 import { CustomMediaPlayer } from "./custom-player";
 
 const SPEAKER_LINE_RE = /^(.+?)\s+((?:(?:\d{1,3}:)?\d{1,3}:\d{2}(?:\.\d{1,3})?))\s*$/;
@@ -13,7 +14,10 @@ export class TimestampManager {
     private boundEnded: (() => void) | null = null;
     private boundPause: (() => void) | null = null;
 
-    constructor(private app: App) {}
+    constructor(
+        private app: App,
+        private stickyManager: StickyMediaManager
+    ) {}
 
     processTimestamps(el: HTMLElement) {
         for (const p of Array.from(el.querySelectorAll<HTMLElement>("p"))) {
@@ -169,12 +173,19 @@ export class TimestampManager {
     }
 
     private findMediaForBtn(container: HTMLElement, btn: HTMLElement): HTMLMediaElement | null {
-        const all = container.querySelectorAll<HTMLElement>("audio, video, .tsp-timestamp");
+        const all = container.querySelectorAll<HTMLElement>("audio, video, .tsp-sticky-anchor, .tsp-timestamp");
         let lastMedia: HTMLMediaElement | null = null;
 
         for (const el of Array.from(all)) {
             if (el.tagName === "AUDIO" || el.tagName === "VIDEO") {
-                lastMedia = el as HTMLMediaElement;
+                const media = el as HTMLMediaElement;
+                if (!this.stickyManager.getAnchorForMedia(media)) {
+                    lastMedia = media;
+                }
+            }
+            else if (el.classList.contains("tsp-sticky-anchor")) {
+                const media = this.stickyManager.getMediaForAnchor(el);
+                if (media) lastMedia = media;
             }
             else if (el === btn) {
                 return lastMedia;
@@ -184,15 +195,34 @@ export class TimestampManager {
     }
 
     private getTimestampsForMedia(container: HTMLElement, media: HTMLMediaElement): HTMLElement[] {
-        const all = Array.from(container.querySelectorAll<HTMLElement>("audio, video, .tsp-timestamp"));
-        const mediaIndex = all.indexOf(media);
-        if (mediaIndex === -1) return [];
+        const representative = this.stickyManager.getAnchorForMedia(media) || media;
+        const all = container.querySelectorAll<HTMLElement>("audio, video, .tsp-sticky-anchor, .tsp-timestamp");
+
+        let repIndex = -1;
+        for (let i = 0; i < all.length; i++) {
+            if (all[i] === representative) {
+                repIndex = i;
+                break;
+            }
+        }
+        if (repIndex === -1) return [];
 
         const result: HTMLElement[] = [];
-        for (let i = mediaIndex + 1; i < all.length; i++) {
+        for (let i = repIndex + 1; i < all.length; i++) {
             const el = all[i];
-            if (el.tagName === "AUDIO" || el.tagName === "VIDEO") break;
-            result.push(el as HTMLElement);
+            let isNextRep = false;
+            if (el.tagName === "AUDIO" || el.tagName === "VIDEO") {
+                if (!this.stickyManager.getAnchorForMedia(el as HTMLMediaElement)) {
+                    isNextRep = true;
+                }
+            } else if (el.classList.contains("tsp-sticky-anchor")) {
+                isNextRep = true;
+            }
+            if (isNextRep) break;
+
+            if (el.classList.contains("tsp-timestamp")) {
+                result.push(el);
+            }
         }
         return result;
     }
