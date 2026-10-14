@@ -2,6 +2,7 @@ import { Plugin, MarkdownView, MarkdownPostProcessorContext, TFile, setIcon } fr
 import { StickyMediaManager } from "./sticky-media";
 import { TimestampManager } from "./timestamps";
 import { createLivePreviewTimestampExtension } from "./timestamps-live-preview";
+import { initPlayerSettings } from "./utils/player-settings";
 
 const MEDIA_EMBED_RE = /!\[\[.+?\.(mp3|webm|wav|m4a|ogg|3gp|flac|mp4|mov|avi|mkv|mpeg)\]\]/i;
 
@@ -12,7 +13,9 @@ export default class TimestampPlayerPlugin extends Plugin {
     private stickyEnabled = true;
     private instrumentedViews = new WeakSet<MarkdownView>();
 
-    onload() {
+    async onload() {
+        const pluginDir = this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
+        await initPlayerSettings(this.app, pluginDir);
         this.stickyManager = new StickyMediaManager(this.app);
         this.stickyManager.initialize();
         this.timestampManager = new TimestampManager(this.app, this.stickyManager);

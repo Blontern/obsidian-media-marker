@@ -429,6 +429,22 @@
     background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
 }
 
+/* 竖屏（仅视频）：居中并限制在页面内，避免超出可视区域 */
+.custom-media-player.tsp-orient-portrait {
+    width: fit-content;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+}
+.custom-media-player.tsp-orient-portrait video {
+    display: block;
+    width: auto;
+    height: 80vh;
+    max-width: 100%;
+    max-height: 80vh;
+    margin: 0 auto;
+}
+
 /* 字幕容器 */
 .tsp-subtitle-container {
     position: absolute;
@@ -438,6 +454,64 @@
     text-align: center;
     pointer-events: none;
     z-index: 5;
+}
+
+/* 设置面板 */
+.tsp-settings-hint {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+}
+
+/* 分段按钮组（多选一） */
+.tsp-segmented {
+    display: inline-flex;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s, 4px);
+    overflow: hidden;
+    background: var(--background-primary);
+}
+
+.tsp-segmented .tsp-segmented-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    padding: 4px 10px;
+    height: auto;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.tsp-segmented .tsp-segmented-btn + .tsp-segmented-btn {
+    border-left: 1px solid var(--background-modifier-border);
+}
+
+.tsp-segmented .tsp-segmented-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.tsp-segmented .tsp-segmented-btn.is-active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.tsp-shortcut-input {
+    width: 140px;
+    text-align: center;
+    font-family: var(--font-monospace);
+    cursor: pointer;
+}
+
+.tsp-shortcut-input:focus {
+    cursor: text;
 }
 
 /* 字幕文本 */

@@ -1,8 +1,15 @@
 import { Menu, Notice, setIcon, App, TFile } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { SubtitleManager } from "./subtitle";
+import { PlaybackSettingsModal, ShortcutSettingsModal } from "./settings-modals";
 import { formatTime as fmtTime, parseTimestamp, TS_PATTERN } from "./utils/time";
 import { parseKeyframes } from "./utils/keyframes";
+import { getPlayerSettings, normalizeKeyEvent, SHORTCUT_DEFS, ShortcutTarget } from "./utils/player-settings";
+
+export type StepSize = "frame" | "keyframe" | "5s";
+
+/** 步长档位顺序：cycleStep 沿此顺序前后切换 */
+const STEP_ORDER: readonly StepSize[] = ["frame", "keyframe", "5s"];
 
 export class CustomMediaPlayer {
     private container: HTMLElement;
@@ -20,7 +27,7 @@ export class CustomMediaPlayer {
     private speedLabelEl: HTMLElement | null = null;
     private subtitleBtn: HTMLElement | null = null;
     /** 跳转步长档位：帧 / 关键帧 / 5 秒 */
-    private step: "frame" | "keyframe" | "5s" = "5s";
+    private step: StepSize = "5s";
 
     private hideTimeout: number | null = null;
     private isMouseOver = false;
@@ -45,6 +52,17 @@ export class CustomMediaPlayer {
     private keyframesLoading = false;
     /** 嵌入链接的原始 src（在包装、吸附前捕获，用于反查 vault 文件） */
     private embedSrc: string | null = null;
+
+    /** 供 SHORTCUT_DEFS 调用的播放器能力集合 */
+    private readonly shortcutContext: ShortcutTarget = {
+        togglePlay: () => this.togglePlay(),
+        seekByStep: (dir) => this.seekByStep(dir),
+        cycleStep: (dir) => this.cycleStep(dir),
+        adjustVolume: (delta) => this.adjustVolume(delta),
+        toggleSubtitle: () => this.toggleSubtitle(),
+        insertTimestamp: () => this.insertTimestamp(),
+        toggleFullscreen: () => this.toggleFullscreen(),
+    };
 
     constructor(private media: HTMLMediaElement, private app: App) {
         // 必须在媒体被移出 .internal-embed 之前捕获链接目标
@@ -120,7 +138,7 @@ export class CustomMediaPlayer {
         rightGroup.appendChild(seekBackwardBtn);
 
         this.stepBtn = createEl("button", { cls: "media-btn media-step-btn" });
-        this.stepBtn.addEventListener("click", () => this.cycleStep());
+        this.stepBtn.addEventListener("click", () => this.cycleStep(1));
         this.stepBtn.setAttribute("aria-label", "切换步长");
         rightGroup.appendChild(this.stepBtn);
 
@@ -140,10 +158,7 @@ export class CustomMediaPlayer {
         rightGroup.appendChild(speedBtn);
 
         // 字幕开关
-        this.subtitleBtn = this.createButton("subtitles", () => {
-            this.subtitleManager.setEnabled(!this.subtitleManager.isEnabled());
-            this.updateSubtitleIcon();
-        });
+        this.subtitleBtn = this.createButton("subtitles", () => this.toggleSubtitle());
         this.subtitleBtn.setAttribute("aria-label", "字幕");
         rightGroup.appendChild(this.subtitleBtn);
 
@@ -159,9 +174,7 @@ export class CustomMediaPlayer {
             }
             this.fullscreenBtn = this.createButton("expand", (e) => {
                 e.stopPropagation();
-                this.doc.fullscreenElement
-                    ? this.doc.exitFullscreen().catch(() => {})
-                    : this.container.requestFullscreen?.().catch(() => {});
+                this.toggleFullscreen();
             });
             rightGroup.appendChild(this.fullscreenBtn);
         }
@@ -219,29 +232,18 @@ export class CustomMediaPlayer {
         this.media.addEventListener("seeked", () => this.updateProgress());
 
         this.container.addEventListener("keydown", (e) => {
-            const key = e.key.toLowerCase();
-
-            // T 键不需要 readyState：插入时间戳是纯粹的编辑操作
-            if (key === "t") {
-                this.insertTimestamp();
-                e.preventDefault();
-                return;
-            }
-
-            if (this.media.readyState < 1) return;
-
-            let handled = true;
-            if (e.shiftKey && e.key === "ArrowLeft") this.cycleStep();
-            else if (e.shiftKey && e.key === "ArrowRight") this.cycleStep();
-            else if (e.key === "ArrowLeft") this.seekByStep(-1);
-            else if (e.key === "ArrowRight") this.seekByStep(1);
-            else if (e.key === " ") this.togglePlay();
-            else if (e.key === "ArrowUp") this.adjustVolume(0.05);
-            else if (e.key === "ArrowDown") this.adjustVolume(-0.05);
-            else if (key === "c") this.subtitleManager.setEnabled(!this.subtitleManager.isEnabled());
-            else handled = false;
-            if (handled) e.preventDefault();
+            const binding = normalizeKeyEvent(e);
+            const shortcuts = getPlayerSettings(this.app).shortcuts;
+            const def = SHORTCUT_DEFS.find(d => shortcuts[d.id] === binding);
+            if (!def) return;
+            // 除个别编辑类操作外，其余快捷键都要等媒体就绪
+            if (def.needsMedia !== false && this.media.readyState < 1) return;
+            def.run(this.shortcutContext);
+            e.preventDefault();
         });
+
+        // 设置面板修改后由 refreshPlayers() 派发，实时应用新的播放方式 / 比例
+        this.container.addEventListener("tsp-settings-changed", () => this.applyPlayerSettings());
 
         // 全屏 / 画中画状态图标同步
         this.container.addEventListener("fullscreenchange", () => {
@@ -259,6 +261,40 @@ export class CustomMediaPlayer {
         this.updateStepLabel();
         this.updateSpeedLabel();
         this.updateSubtitleIcon();
+        this.applyPlayerSettings();
+    }
+
+    /** 应用全局播放设置（播放方式 / 视频比例 / 屏幕方向） */
+    private applyPlayerSettings() {
+        const settings = getPlayerSettings(this.app);
+        this.media.loop = settings.playbackMode === "loop";
+        if (this.media.tagName !== "VIDEO") return;
+
+        const video = this.media as HTMLVideoElement;
+        const container = this.container;
+        container.removeClass("tsp-orient-portrait");
+        container.removeClass("tsp-orient-landscape");
+
+        // 方向优先于画面比例：横屏 → 16:9，竖屏 → 9:16，自动 → 使用视频比例
+        let ratio: string | null = settings.aspectRatio === "auto"
+            ? null
+            : settings.aspectRatio.replace(":", " / ");
+        if (settings.orientation === "portrait") {
+            ratio = "9 / 16";
+            container.addClass("tsp-orient-portrait");
+            video.style.width = "auto";
+            video.style.height = "80vh";
+        } else {
+            video.style.width = "100%";
+            video.style.removeProperty("height");
+            if (settings.orientation === "landscape") {
+                ratio = "16 / 9";
+                container.addClass("tsp-orient-landscape");
+            }
+        }
+
+        if (ratio) video.style.aspectRatio = ratio;
+        else video.style.removeProperty("aspect-ratio");
     }
 
     private setPlayIcon(icon: "play" | "pause") {
@@ -298,9 +334,10 @@ export class CustomMediaPlayer {
         else this.seek(5 * dir);
     }
 
-    /** 循环切换步长档位：帧 → 关键帧 → 5 秒 */
-    private cycleStep() {
-        this.step = this.step === "frame" ? "keyframe" : this.step === "keyframe" ? "5s" : "frame";
+    /** 切换步长档位：dir=1 放大（帧 → 关键帧 → 5 秒），dir=-1 缩小 */
+    private cycleStep(dir: 1 | -1) {
+        const i = STEP_ORDER.indexOf(this.step);
+        this.step = STEP_ORDER[(i + dir + STEP_ORDER.length) % STEP_ORDER.length];
         this.updateStepLabel();
     }
 
@@ -591,6 +628,20 @@ export class CustomMediaPlayer {
         }
     }
 
+    private toggleSubtitle() {
+        this.subtitleManager.setEnabled(!this.subtitleManager.isEnabled());
+        this.updateSubtitleIcon();
+    }
+
+    private toggleFullscreen() {
+        if (this.media.tagName !== "VIDEO") return;
+        if (this.doc.fullscreenElement) {
+            this.doc.exitFullscreen().catch(() => {});
+        } else {
+            this.container.requestFullscreen?.().catch(() => {});
+        }
+    }
+
     private dispatchMediaEvent(type: string) {
         this.container.dispatchEvent(new CustomEvent(type, {
             bubbles: true,
@@ -686,6 +737,20 @@ export class CustomMediaPlayer {
             item.setTitle("插入当前时间戳到队列")
                 .setIcon("text-cursor-input")
                 .onClick(() => this.insertTimestamp());
+        });
+
+        menu.addSeparator();
+
+        menu.addItem((item) => {
+            item.setTitle("更多播放设置")
+                .setIcon("wrench")
+                .onClick(() => new PlaybackSettingsModal(this.app).open());
+        });
+
+        menu.addItem((item) => {
+            item.setTitle("快捷键设置")
+                .setIcon("keyboard")
+                .onClick(() => new ShortcutSettingsModal(this.app).open());
         });
 
         this.showMenuAt(menu, e.target as HTMLElement);

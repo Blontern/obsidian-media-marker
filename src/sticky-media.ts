@@ -280,13 +280,20 @@ export class StickyMediaController extends BaseController {
         const hr = this.hostEl.getBoundingClientRect();
         const sr = this.scrollEl.getBoundingClientRect();
         let left = this.origLeft;
+        // 可用宽度优先取 anchor 宽度（≈承载内容列宽度），便于窄内容精确居中
+        let avail = Math.max(0, hr.width - Math.max(0, left));
         if (this.anchor?.isConnected) {
             const ar = this.anchor.getBoundingClientRect();
             if (Number.isFinite(ar.left - hr.left)) left = ar.left - hr.left;
+            if (ar.width > 0) avail = ar.width;
         }
-        const w = Math.min(this.origW, Math.max(0, hr.width - Math.max(0, left)));
+        const w = Math.min(this.origW, avail);
+        // 竖屏等窄内容在吸附层内水平居中（普通内容 origW≈avail，不会偏移）
+        const centering = this.wrapper.classList.contains("tsp-orient-portrait")
+            ? Math.max(0, (avail - w) / 2)
+            : 0;
         this.placeholder.style.cssText = `height:${this.origH}px;width:${w}px`;
-        this.layer.style.cssText = `top:${sr.top - hr.top}px;left:${left}px;width:${w}px`;
+        this.layer.style.cssText = `top:${sr.top - hr.top}px;left:${left + centering}px;width:${w}px`;
     }
 }
 
