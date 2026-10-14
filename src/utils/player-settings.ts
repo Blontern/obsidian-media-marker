@@ -1,20 +1,21 @@
 import { App, normalizePath } from "obsidian";
+import { StringKey, t } from "../i18n";
 
 export type PlaybackMode = "pause" | "loop";
 export type AspectRatio = "auto" | "4:3" | "16:9";
 export type Orientation = "auto" | "landscape" | "portrait";
 
-export interface Option<T extends string> { value: T; label: string; }
+export interface Option<T extends string> { value: T; labelKey: StringKey; }
 
 /** 各设置项的选项（首项即默认值） */
 export const PLAYBACK_OPTIONS: Option<PlaybackMode>[] = [
-    { value: "pause", label: "播完暂停" }, { value: "loop", label: "循环播放" },
+    { value: "pause", labelKey: "opt.pause" }, { value: "loop", labelKey: "opt.loop" },
 ];
 export const ASPECT_OPTIONS: Option<AspectRatio>[] = [
-    { value: "auto", label: "自动识别" }, { value: "4:3", label: "4:3" }, { value: "16:9", label: "16:9" },
+    { value: "auto", labelKey: "opt.autoDetect" }, { value: "4:3", labelKey: "opt.ratio43" }, { value: "16:9", labelKey: "opt.ratio169" },
 ];
 export const ORIENTATION_OPTIONS: Option<Orientation>[] = [
-    { value: "auto", label: "自动" }, { value: "landscape", label: "横屏" }, { value: "portrait", label: "竖屏" },
+    { value: "auto", labelKey: "opt.auto" }, { value: "landscape", labelKey: "opt.landscape" }, { value: "portrait", labelKey: "opt.portrait" },
 ];
 
 /** 快捷键可调用的播放器能力（由 CustomMediaPlayer 实现） */
@@ -31,7 +32,7 @@ export interface ShortcutTarget {
 
 export interface ShortcutDef {
     id: string;
-    label: string;
+    labelKey: StringKey;
     /** 默认键位（归一化格式，如 "c" / "Space" / "Shift+ArrowLeft"） */
     defaultKey: string;
     /** 触发时执行的动作，由传入的 target 执行 */
@@ -42,16 +43,16 @@ export interface ShortcutDef {
 
 /** 可在快捷键面板中绑定的功能 */
 export const SHORTCUT_DEFS: ShortcutDef[] = [
-    { id: "togglePlay", label: "播放 / 暂停", defaultKey: "Space", run: t => t.togglePlay() },
-    { id: "seekBackward", label: "后退一步", defaultKey: "ArrowLeft", run: t => t.seekByStep(-1) },
-    { id: "seekForward", label: "前进一步", defaultKey: "ArrowRight", run: t => t.seekByStep(1) },
-    { id: "cycleStepBackward", label: "减小跳转步长", defaultKey: "Shift+ArrowLeft", run: t => t.cycleStep(-1) },
-    { id: "cycleStepForward", label: "增大跳转步长", defaultKey: "Shift+ArrowRight", run: t => t.cycleStep(1) },
-    { id: "volumeUp", label: "增大音量", defaultKey: "ArrowUp", run: t => t.adjustVolume(0.05) },
-    { id: "volumeDown", label: "减小音量", defaultKey: "ArrowDown", run: t => t.adjustVolume(-0.05) },
-    { id: "toggleSubtitle", label: "切换字幕", defaultKey: "c", run: t => t.toggleSubtitle() },
-    { id: "insertTimestamp", label: "插入时间戳", defaultKey: "t", needsMedia: false, run: t => t.insertTimestamp() },
-    { id: "fullscreen", label: "全屏", defaultKey: "f", needsMedia: false, run: t => t.toggleFullscreen() },
+    { id: "togglePlay", labelKey: "sc.togglePlay", defaultKey: "Space", run: p => p.togglePlay() },
+    { id: "seekBackward", labelKey: "sc.seekBackward", defaultKey: "ArrowLeft", run: p => p.seekByStep(-1) },
+    { id: "seekForward", labelKey: "sc.seekForward", defaultKey: "ArrowRight", run: p => p.seekByStep(1) },
+    { id: "cycleStepBackward", labelKey: "sc.cycleStepBackward", defaultKey: "Shift+ArrowLeft", run: p => p.cycleStep(-1) },
+    { id: "cycleStepForward", labelKey: "sc.cycleStepForward", defaultKey: "Shift+ArrowRight", run: p => p.cycleStep(1) },
+    { id: "volumeUp", labelKey: "sc.volumeUp", defaultKey: "ArrowUp", run: p => p.adjustVolume(0.05) },
+    { id: "volumeDown", labelKey: "sc.volumeDown", defaultKey: "ArrowDown", run: p => p.adjustVolume(-0.05) },
+    { id: "toggleSubtitle", labelKey: "sc.toggleSubtitle", defaultKey: "c", run: p => p.toggleSubtitle() },
+    { id: "insertTimestamp", labelKey: "sc.insertTimestamp", defaultKey: "t", needsMedia: false, run: p => p.insertTimestamp() },
+    { id: "fullscreen", labelKey: "sc.fullscreen", defaultKey: "f", needsMedia: false, run: p => p.toggleFullscreen() },
 ];
 
 export interface PlayerSettings {
@@ -156,11 +157,15 @@ export function isModifierOnly(e: KeyboardEvent): boolean {
     return ["Control", "Alt", "Shift", "Meta"].includes(e.key);
 }
 
-const KEY_LABELS: Record<string, string> = {
-    ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓", Space: "空格", Escape: "Esc",
+const ARROW_LABELS: Record<string, string> = {
+    ArrowLeft: "←", ArrowRight: "→", ArrowUp: "↑", ArrowDown: "↓",
 };
 
 /** 键位的可读显示：Shift+ArrowLeft → Shift+← */
 export function prettyKey(binding: string): string {
-    return binding.replace(/Arrow\w+|Space|Escape/g, m => KEY_LABELS[m] ?? m);
+    return binding.split("+").map(part =>
+        part === "Space" ? t("key.space")
+            : part === "Escape" ? "Esc"
+            : ARROW_LABELS[part] ?? part
+    ).join("+");
 }

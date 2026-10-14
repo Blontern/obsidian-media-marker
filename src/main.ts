@@ -2,6 +2,7 @@ import { Plugin, MarkdownView, MarkdownPostProcessorContext, TFile, setIcon } fr
 import { StickyMediaManager } from "./sticky-media";
 import { TimestampManager } from "./timestamps";
 import { createLivePreviewTimestampExtension } from "./timestamps-live-preview";
+import { t } from "./i18n";
 import { initPlayerSettings } from "./utils/player-settings";
 
 const MEDIA_EMBED_RE = /!\[\[.+?\.(mp3|webm|wav|m4a|ogg|3gp|flac|mp4|mov|avi|mkv|mpeg)\]\]/i;
@@ -95,7 +96,7 @@ export default class TimestampPlayerPlugin extends Plugin {
             this.instrumentedViews.add(view);
             const btn = view.addAction(
                 this.stickyEnabled ? "pin" : "pin-off",
-                this.stickyEnabled ? "禁用媒体吸附" : "启用媒体吸附",
+                this.stickyEnabled ? t("sticky.disable") : t("sticky.enable"),
                 () => this.toggleSticky()
             );
             btn.setAttribute("data-tsp-sticky-toggle", "");
@@ -105,7 +106,7 @@ export default class TimestampPlayerPlugin extends Plugin {
     private toggleSticky() {
         this.stickyEnabled = !this.stickyEnabled;
         this.stickyManager.setEnabled(this.stickyEnabled);
-        const title = this.stickyEnabled ? "禁用媒体吸附" : "启用媒体吸附";
+        const title = this.stickyEnabled ? t("sticky.disable") : t("sticky.enable");
         for (const btn of Array.from(document.querySelectorAll<HTMLElement>(".view-action[data-tsp-sticky-toggle]"))) {
             setIcon(btn, this.stickyEnabled ? "pin" : "pin-off");
             btn.setAttribute("aria-label", title);

@@ -2,6 +2,7 @@ import { Menu, Notice, setIcon, App, TFile } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { SubtitleManager } from "./subtitle";
 import { PlaybackSettingsModal, ShortcutSettingsModal } from "./settings-modals";
+import { t } from "./i18n";
 import { formatTime as fmtTime, parseTimestamp, TS_PATTERN } from "./utils/time";
 import { parseKeyframes } from "./utils/keyframes";
 import { getPlayerSettings, normalizeKeyEvent, SHORTCUT_DEFS, ShortcutTarget } from "./utils/player-settings";
@@ -134,21 +135,21 @@ export class CustomMediaPlayer {
         const rightGroup = createDiv({ cls: "media-controls-group", attr: { "data-media-group": "right" } });
 
         const seekBackwardBtn = this.createButton("rewind", () => this.seekByStep(-1));
-        seekBackwardBtn.setAttribute("aria-label", "向后");
+        seekBackwardBtn.setAttribute("aria-label", t("aria.rewind"));
         rightGroup.appendChild(seekBackwardBtn);
 
         this.stepBtn = createEl("button", { cls: "media-btn media-step-btn" });
         this.stepBtn.addEventListener("click", () => this.cycleStep(1));
-        this.stepBtn.setAttribute("aria-label", "切换步长");
+        this.stepBtn.setAttribute("aria-label", t("aria.step"));
         rightGroup.appendChild(this.stepBtn);
 
         const seekForwardBtn = this.createButton("fast-forward", () => this.seekByStep(1));
-        seekForwardBtn.setAttribute("aria-label", "向前");
+        seekForwardBtn.setAttribute("aria-label", t("aria.forward"));
         rightGroup.appendChild(seekForwardBtn);
 
         // 播放速度：timer 图标 + 当前倍率，点击弹出倍率菜单
         const speedBtn = createEl("button", { cls: "media-btn media-speed-btn" });
-        speedBtn.setAttribute("aria-label", "切换播放速度");
+        speedBtn.setAttribute("aria-label", t("aria.speed"));
         const speedIcon = createSpan({ cls: "media-speed-icon" });
         setIcon(speedIcon, "timer");
         speedBtn.appendChild(speedIcon);
@@ -159,7 +160,7 @@ export class CustomMediaPlayer {
 
         // 字幕开关
         this.subtitleBtn = this.createButton("subtitles", () => this.toggleSubtitle());
-        this.subtitleBtn.setAttribute("aria-label", "字幕");
+        this.subtitleBtn.setAttribute("aria-label", t("aria.subtitle"));
         rightGroup.appendChild(this.subtitleBtn);
 
         if (this.media.tagName === "VIDEO") {
@@ -344,7 +345,9 @@ export class CustomMediaPlayer {
     /** 同步步长按钮的文字标签 */
     private updateStepLabel() {
         if (this.stepBtn) {
-            this.stepBtn.textContent = this.step === "frame" ? "帧" : this.step === "keyframe" ? "关键帧" : "5秒";
+            this.stepBtn.textContent = this.step === "frame" ? t("step.frame")
+                : this.step === "keyframe" ? t("step.keyframe")
+                : t("step.5s");
         }
     }
 
@@ -510,7 +513,7 @@ export class CustomMediaPlayer {
         const cmEditor = this.media.closest(".cm-editor") as HTMLElement | null;
         const cmView = cmEditor ? EditorView.findFromDOM(cmEditor) : null;
         if (!cmView) {
-            new Notice("插入时间戳仅支持实时预览模式");
+            new Notice(t("notice.insertPreviewOnly"));
             return;
         }
 
@@ -520,7 +523,7 @@ export class CustomMediaPlayer {
             const pos = cmView.posAtDOM(target);
             mediaLine = cmView.state.doc.lineAt(pos);
         } catch {
-            new Notice("无法定位媒体源行");
+            new Notice(t("notice.noMediaLine"));
             return;
         }
 
@@ -585,7 +588,7 @@ export class CustomMediaPlayer {
             selection: { anchor: cursor },
         });
 
-        new Notice("已插入时间戳 " + ts);
+        new Notice(t("notice.inserted", { time: ts }));
     }
 
     private setupFrameTracking() {
@@ -701,26 +704,26 @@ export class CustomMediaPlayer {
         const menu = new Menu();
 
         menu.addItem((item) => {
-            item.setTitle("时间戳输出携带毫秒")
+            item.setTitle(t("menu.ms"))
                 .setIcon("timer")
                 .setChecked(this.timestampWithMs)
                 .onClick(() => {
                     this.timestampWithMs = !this.timestampWithMs;
                     this.updateDuration();
                     this.updateProgress();
-                    new Notice(this.timestampWithMs ? "已开启毫秒显示" : "已关闭毫秒显示");
+                    new Notice(this.timestampWithMs ? t("notice.msOn") : t("notice.msOff"));
                 });
         });
 
         menu.addSeparator();
 
         menu.addItem((item) => {
-            item.setTitle("复制当前时间戳")
+            item.setTitle(t("menu.copy"))
                 .setIcon("copy")
                 .onClick(() => {
                     const ts = this.formatTime(this.media.currentTime);
                     navigator.clipboard.writeText(ts)
-                        .then(() => new Notice("时间戳已复制: " + ts))
+                        .then(() => new Notice(t("notice.copied", { time: ts })))
                         .catch(() => {
                             const ta = this.doc.createElement("textarea");
                             ta.value = ts;
@@ -728,13 +731,13 @@ export class CustomMediaPlayer {
                             ta.select();
                             this.doc.execCommand("copy");
                             ta.remove();
-                            new Notice("时间戳已复制: " + ts);
+                            new Notice(t("notice.copied", { time: ts }));
                         });
                 });
         });
 
         menu.addItem((item) => {
-            item.setTitle("插入当前时间戳到队列")
+            item.setTitle(t("menu.insert"))
                 .setIcon("text-cursor-input")
                 .onClick(() => this.insertTimestamp());
         });
@@ -742,13 +745,13 @@ export class CustomMediaPlayer {
         menu.addSeparator();
 
         menu.addItem((item) => {
-            item.setTitle("更多播放设置")
+            item.setTitle(t("menu.playback"))
                 .setIcon("wrench")
                 .onClick(() => new PlaybackSettingsModal(this.app).open());
         });
 
         menu.addItem((item) => {
-            item.setTitle("快捷键设置")
+            item.setTitle(t("menu.shortcuts"))
                 .setIcon("keyboard")
                 .onClick(() => new ShortcutSettingsModal(this.app).open());
         });

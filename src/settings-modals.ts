@@ -1,4 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
+import { t } from "./i18n";
 import {
     ASPECT_OPTIONS,
     ORIENTATION_OPTIONS,
@@ -24,7 +25,7 @@ function addSegmented<T extends string>(
 ) {
     const group = setting.controlEl.createDiv({ cls: "tsp-segmented" });
     const buttons = options.map(opt => {
-        const btn = group.createEl("button", { cls: "tsp-segmented-btn", text: opt.label });
+        const btn = group.createEl("button", { cls: "tsp-segmented-btn", text: t(opt.labelKey) });
         if (opt.value === current) btn.addClass("is-active");
         btn.addEventListener("click", () => {
             buttons.forEach(b => b.removeClass("is-active"));
@@ -44,7 +45,7 @@ export class PlaybackSettingsModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         const settings = getPlayerSettings(this.app);
-        contentEl.createEl("h2", { text: "更多播放设置" });
+        contentEl.createEl("h2", { text: t("playback.title") });
 
         const row = <T extends string>(
             name: string,
@@ -62,9 +63,9 @@ export class PlaybackSettingsModal extends Modal {
             },
         );
 
-        row("播放方式", "媒体播放结束后的行为", PLAYBACK_OPTIONS, settings.playbackMode, v => ({ playbackMode: v }));
-        row("视频比例", "强制画面显示比例（仅对视频生效）", ASPECT_OPTIONS, settings.aspectRatio, v => ({ aspectRatio: v }));
-        row("屏幕方向", "横屏 / 竖屏（仅对视频生效，竖屏会限制在页面内）", ORIENTATION_OPTIONS, settings.orientation, v => ({ orientation: v }));
+        row(t("playback.mode"), t("playback.modeDesc"), PLAYBACK_OPTIONS, settings.playbackMode, v => ({ playbackMode: v }));
+        row(t("playback.ratio"), t("playback.ratioDesc"), ASPECT_OPTIONS, settings.aspectRatio, v => ({ aspectRatio: v }));
+        row(t("playback.orientation"), t("playback.orientationDesc"), ORIENTATION_OPTIONS, settings.orientation, v => ({ orientation: v }));
     }
 }
 
@@ -76,14 +77,14 @@ export class ShortcutSettingsModal extends Modal {
 
     onOpen() {
         const { contentEl } = this;
-        contentEl.createEl("h2", { text: "快捷键设置" });
+        contentEl.createEl("h2", { text: t("shortcut.title") });
         contentEl.createEl("p", {
             cls: "tsp-settings-hint",
-            text: "点击输入框后按下新键位完成绑定，按 Esc 取消。",
+            text: t("shortcut.hint"),
         });
 
         for (const def of SHORTCUT_DEFS) {
-            const setting = new Setting(contentEl).setName(def.label);
+            const setting = new Setting(contentEl).setName(t(def.labelKey));
             let input: HTMLInputElement;
 
             setting.addText(text => {
@@ -105,7 +106,7 @@ export class ShortcutSettingsModal extends Modal {
                 }, true);
             });
 
-            setting.addButton(btn => btn.setButtonText("恢复默认").onClick(() => {
+            setting.addButton(btn => btn.setButtonText(t("shortcut.reset")).onClick(() => {
                 input.value = prettyKey(resetShortcut(this.app, def.id).shortcuts[def.id]);
                 refreshPlayers(this.app);
             }));
