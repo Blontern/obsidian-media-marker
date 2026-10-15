@@ -1,8 +1,8 @@
 {
   "id": "media-marker",
   "name": "Media Marker",
-  "version": "1.0.0",
-  "minAppVersion": "1.0.0",
+  "version": "1.0.1",
+  "minAppVersion": "1.9.0",
   "description": "Click timestamps in transcription documents to seek and play the embedded audio/video, with a fully custom player, sticky media, subtitles, and keyboard shortcuts.",
   "author": "Blontern",
   "isDesktopOnly": false

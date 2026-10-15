@@ -63,7 +63,7 @@ export default class TimestampPlayerPlugin extends Plugin {
 
             for (const m of mutations) {
                 for (const node of Array.from(m.addedNodes)) {
-                    if (!(node instanceof HTMLElement)) continue;
+                    if (!node.instanceOf(HTMLElement)) continue;
 
                     if (node.matches("audio, video")) {
                         added.push(node as HTMLMediaElement);

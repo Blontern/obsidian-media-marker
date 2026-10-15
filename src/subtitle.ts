@@ -127,7 +127,9 @@ export class SubtitleManager {
                 const name = new URL(url, location.href).pathname.split('/').pop() || '';
                 return this.stripExt(name);
             }
-        } catch {}
+        } catch {
+            // 非法 URL 时忽略，返回空串
+        }
 
         return '';
     }

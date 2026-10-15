@@ -73,7 +73,7 @@ export class CustomMediaPlayer {
         this.container.addClass(media.tagName === "AUDIO" ? "tsp-audio" : "tsp-video");
         media.parentNode?.insertBefore(this.container, media);
         this.container.appendChild(media);
-        media.style.width = "100%";
+        media.setCssStyles({ width: "100%" });
     }
 
     /** 媒体所属文档（可能与主窗口不同，用于弹出窗口 / 多窗口场景） */
@@ -167,9 +167,10 @@ export class CustomMediaPlayer {
             if ('requestPictureInPicture' in this.media) {
                 this.pipBtn = this.createButton("picture-in-picture", (e) => {
                     e.stopPropagation();
-                    this.doc.pictureInPictureElement
-                        ? this.doc.exitPictureInPicture?.().catch(() => {})
-                        : (this.media as HTMLVideoElement).requestPictureInPicture?.().catch(() => {});
+                    const pipPromise = this.doc.pictureInPictureElement
+                        ? this.doc.exitPictureInPicture?.()
+                        : (this.media as HTMLVideoElement).requestPictureInPicture?.();
+                    void pipPromise?.catch(() => {});
                 });
                 rightGroup.appendChild(this.pipBtn);
             }
@@ -283,10 +284,9 @@ export class CustomMediaPlayer {
         if (settings.orientation === "portrait") {
             ratio = "9 / 16";
             container.addClass("tsp-orient-portrait");
-            video.style.width = "auto";
-            video.style.height = "80vh";
+            video.setCssStyles({ width: "auto", height: "80vh" });
         } else {
-            video.style.width = "100%";
+            video.setCssStyles({ width: "100%" });
             video.style.removeProperty("height");
             if (settings.orientation === "landscape") {
                 ratio = "16 / 9";
@@ -392,7 +392,7 @@ export class CustomMediaPlayer {
         if (kf === undefined) {
             // 首次按键：惰性解析关键帧表（避免每个嵌入构建时都整体读盘），
             // 本次先按帧步进；解析完成后自动使用真实关键帧
-            this.loadKeyframes();
+            void this.loadKeyframes();
             this.seekFrame(dir);
             return;
         }
@@ -510,7 +510,7 @@ export class CustomMediaPlayer {
      * 仅支持实时预览：需要能从媒体 DOM 反查 CodeMirror 视图与文档位置。
      */
     private insertTimestamp() {
-        const cmEditor = this.media.closest(".cm-editor") as HTMLElement | null;
+        const cmEditor = this.media.closest<HTMLElement>(".cm-editor");
         const cmView = cmEditor ? EditorView.findFromDOM(cmEditor) : null;
         if (!cmView) {
             new Notice(t("notice.insertPreviewOnly"));
@@ -519,7 +519,7 @@ export class CustomMediaPlayer {
 
         let mediaLine;
         try {
-            const target = (this.media.closest(".cm-line") as HTMLElement | null) ?? this.media;
+            const target = this.media.closest<HTMLElement>(".cm-line") ?? this.media;
             const pos = cmView.posAtDOM(target);
             mediaLine = cmView.state.doc.lineAt(pos);
         } catch {
@@ -691,7 +691,7 @@ export class CustomMediaPlayer {
         this.tooltip.textContent = this.formatTime(pct * this.media.duration);
         this.tooltip.style.left = (e.clientX - this.tooltip.offsetWidth / 2) + "px";
         this.tooltip.style.top = (rect.top - 30) + "px";
-        this.tooltip.style.display = "block";
+        this.tooltip.setCssStyles({ display: "block" });
     }
 
     private hideTooltip() {
@@ -724,15 +724,7 @@ export class CustomMediaPlayer {
                     const ts = this.formatTime(this.media.currentTime);
                     navigator.clipboard.writeText(ts)
                         .then(() => new Notice(t("notice.copied", { time: ts })))
-                        .catch(() => {
-                            const ta = this.doc.createElement("textarea");
-                            ta.value = ts;
-                            this.doc.body.appendChild(ta);
-                            ta.select();
-                            this.doc.execCommand("copy");
-                            ta.remove();
-                            new Notice(t("notice.copied", { time: ts }));
-                        });
+                        .catch(() => new Notice(t("notice.copyFailed", { time: ts })));
                 });
         });
 
@@ -763,10 +755,10 @@ export class CustomMediaPlayer {
         const rect = target.getBoundingClientRect();
         menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
         if (this.doc.fullscreenElement === this.container) {
-            const el = (menu as any).dom;
+            const el = (menu as Menu & { dom?: HTMLElement }).dom;
             if (el) {
                 this.container.appendChild(el);
-                el.style.zIndex = '9999';
+                el.setCssStyles({ zIndex: "9999" });
             }
         }
     }

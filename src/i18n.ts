@@ -27,6 +27,7 @@ const en = {
     "notice.msOn": "Milliseconds display enabled",
     "notice.msOff": "Milliseconds display disabled",
     "notice.copied": "Timestamp copied: {time}",
+    "notice.copyFailed": "Could not copy timestamp: {time}",
 
     "sticky.enable": "Enable media pinning",
     "sticky.disable": "Disable media pinning",
@@ -91,6 +92,7 @@ const zhCN: Record<StringKey, string> = {
     "notice.msOn": "已开启毫秒显示",
     "notice.msOff": "已关闭毫秒显示",
     "notice.copied": "时间戳已复制: {time}",
+    "notice.copyFailed": "无法复制时间戳: {time}",
 
     "sticky.enable": "启用媒体吸附",
     "sticky.disable": "禁用媒体吸附",
@@ -153,6 +155,7 @@ const zhTW: Record<StringKey, string> = {
     "notice.msOn": "已開啟毫秒顯示",
     "notice.msOff": "已關閉毫秒顯示",
     "notice.copied": "已複製時間戳：{time}",
+    "notice.copyFailed": "無法複製時間戳：{time}",
 
     "sticky.enable": "啟用媒體釘選",
     "sticky.disable": "停用媒體釘選",

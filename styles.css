@@ -125,8 +125,8 @@
 }
 
 /* ===== 音频播放器 ===== */
-.custom-media-player:has(audio) {
-    all: initial;
+.custom-media-player.tsp-audio {
+    overflow: visible;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -145,19 +145,19 @@
     --mp-track: var(--background-modifier-border);
 }
 
-.custom-media-player:has(audio) > audio {
+.custom-media-player.tsp-audio > audio {
     display: none;
 }
 
 /* 歌词区（封面 + 歌词，横向布局） */
-.custom-media-player:has(audio) .tsp-lyrics-area {
+.custom-media-player.tsp-audio .tsp-lyrics-area {
     display: flex;
     align-items: center;
     gap: 14px;
 }
 
 /* 正方形封面：窄容器时按宽度收缩，保持 1:1 */
-.custom-media-player:has(audio) .tsp-lyrics-cover {
+.custom-media-player.tsp-audio .tsp-lyrics-cover {
     flex: 0 0 auto;
     width: min(100px, 30%);
     aspect-ratio: 1 / 1;
@@ -169,13 +169,13 @@
     background: var(--background-modifier-hover);
     color: var(--text-muted);
 }
-.custom-media-player:has(audio) .tsp-lyrics-cover svg {
+.custom-media-player.tsp-audio .tsp-lyrics-cover svg {
     width: 40px;
     height: 40px;
     stroke: currentColor;
     fill: none;
 }
-.custom-media-player:has(audio) .tsp-lyrics-cover img {
+.custom-media-player.tsp-audio .tsp-lyrics-cover img {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -183,7 +183,7 @@
 }
 
 /* 歌词滚动区（音频） */
-.custom-media-player:has(audio) .tsp-lyrics-container {
+.custom-media-player.tsp-audio .tsp-lyrics-container {
     position: relative;
     flex: 1;
     min-width: 0;
@@ -196,19 +196,19 @@
     scrollbar-width: thin;
     scrollbar-color: var(--interactive-accent) transparent;
 }
-.custom-media-player:has(audio) .tsp-lyrics-container::-webkit-scrollbar {
+.custom-media-player.tsp-audio .tsp-lyrics-container::-webkit-scrollbar {
     width: 3px;
 }
-.custom-media-player:has(audio) .tsp-lyrics-container::-webkit-scrollbar-track {
+.custom-media-player.tsp-audio .tsp-lyrics-container::-webkit-scrollbar-track {
     background: transparent;
 }
-.custom-media-player:has(audio) .tsp-lyrics-container::-webkit-scrollbar-thumb {
+.custom-media-player.tsp-audio .tsp-lyrics-container::-webkit-scrollbar-thumb {
     background: var(--interactive-accent);
     border-radius: 10px;
     opacity: 0.4;
 }
 
-.custom-media-player:has(audio) .tsp-lyric-line {
+.custom-media-player.tsp-audio .tsp-lyric-line {
     font-size: 13px;
     padding: 7px 12px;
     border-radius: 8px;
@@ -217,7 +217,7 @@
     opacity: 0.7;
     transition: opacity 0.25s ease, color 0.25s ease;
 }
-.custom-media-player:has(audio) .tsp-lyric-line.active {
+.custom-media-player.tsp-audio .tsp-lyric-line.active {
     opacity: 1;
     color: var(--text-accent);
     font-weight: 600;
@@ -225,7 +225,7 @@
 }
 
 /* 控制栏（音频：常显、主题配色） */
-.custom-media-player:has(audio) .media-controls {
+.custom-media-player.tsp-audio .media-controls {
     position: static;
     background: none;
     border-radius: 0;
@@ -236,25 +236,25 @@
     gap: 6px;
 }
 
-.custom-media-player:has(audio) .media-btn {
+.custom-media-player.tsp-audio .media-btn {
     color: var(--text-muted);
 }
-.custom-media-player:has(audio) .media-btn:hover {
+.custom-media-player.tsp-audio .media-btn:hover {
     color: var(--text-accent);
 }
-.custom-media-player:has(audio) .media-time {
+.custom-media-player.tsp-audio .media-time {
     color: var(--text-faint);
 }
 
 /* 音频：文字标签按钮跟随主题配色 */
-.custom-media-player:has(audio) .media-step-btn,
-.custom-media-player:has(audio) .media-speed-btn {
+.custom-media-player.tsp-audio .media-step-btn,
+.custom-media-player.tsp-audio .media-speed-btn {
     color: var(--text-muted);
     border-color: var(--background-modifier-border);
     background: var(--background-modifier-hover);
 }
-.custom-media-player:has(audio) .media-step-btn:hover,
-.custom-media-player:has(audio) .media-speed-btn:hover {
+.custom-media-player.tsp-audio .media-step-btn:hover,
+.custom-media-player.tsp-audio .media-speed-btn:hover {
     color: var(--text-accent);
 }
 
@@ -531,7 +531,7 @@
 
 /* ===== 移动端音频播放器回退 ===== */
 .is-mobile .custom-media-player.tsp-audio {
-    all: initial;
+    overflow: visible;
     position: relative;
     display: flex;
     flex-direction: column;

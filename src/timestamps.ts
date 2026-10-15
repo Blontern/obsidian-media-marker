@@ -128,7 +128,7 @@ export class TimestampManager {
 
     /** 判断节点是否为 CodeMirror 的装饰性 span（类名包含 cm- 前缀） */
     private isCmSpan(node: Node): node is HTMLElement {
-        return node instanceof HTMLElement && CM_SPAN_RE.test(node.className);
+        return node.instanceOf(HTMLElement) && CM_SPAN_RE.test(node.className);
     }
 
     private createTimestampBtn(timeStr: string, totalSeconds: number): HTMLSpanElement {
