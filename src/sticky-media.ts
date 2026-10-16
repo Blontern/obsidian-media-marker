@@ -146,7 +146,7 @@ export class StickyMediaController extends BaseController {
     }
 
     private installAnchor() {
-        this.anchor = this.media.ownerDocument.createDiv();
+        this.anchor = createDiv();
         this.anchor.className = "tsp-sticky-anchor";
         this.anchor.setAttribute("aria-hidden", "true");
         this.wrapper.before(this.anchor);
@@ -212,13 +212,13 @@ export class StickyMediaController extends BaseController {
         this.origH = wr.height;
         this.origLeft = wr.left - hr.left;
 
-        this.placeholder = this.media.ownerDocument.createDiv();
+        this.placeholder = createDiv();
         this.placeholder.className = "tsp-sticky-placeholder";
         this.placeholder.setAttribute("aria-hidden", "true");
         this.placeholder.style.cssText = `height:${this.origH}px;width:${this.origW}px`;
         this.anchor.after(this.placeholder);
 
-        this.layer = this.media.ownerDocument.createDiv();
+        this.layer = createDiv();
         this.layer.className = "tsp-sticky-media-layer";
         this.hostEl.classList.add("tsp-sticky-host-context");
         this.hostEl.appendChild(this.layer);
