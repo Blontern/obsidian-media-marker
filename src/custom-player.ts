@@ -266,6 +266,21 @@ export class CustomMediaPlayer {
         this.applyPlayerSettings();
     }
 
+    /** 解除包装：把媒体元素放回原位并移除自定义控件（插件卸载时调用） */
+    destroy() {
+        this.clearHideTimer();
+        this.hideTooltip();
+        const media = this.media;
+        media.removeAttribute("data-custom-player");
+        media.setAttribute("controls", "");
+        media.style.removeProperty("width");
+        media.style.removeProperty("height");
+        media.style.removeProperty("aspect-ratio");
+        const parent = this.container.parentNode;
+        if (parent) parent.insertBefore(media, this.container);
+        this.container.remove();
+    }
+
     /** 应用全局播放设置（播放方式 / 视频比例 / 屏幕方向） */
     private applyPlayerSettings() {
         const settings = getPlayerSettings(this.app);

@@ -303,11 +303,11 @@ export class StickyMediaManager {
     private timer: number | null = null;
     private readonly anchorMap = new Map<HTMLElement, HTMLMediaElement>();
     private readonly mediaMap = new WeakMap<HTMLMediaElement, HTMLElement>();
-    private enabled = true;
+    private enabled = false;
 
     constructor(private app: App) {}
 
-    initialize() { this.startObs(); }
+    initialize() { if (this.enabled) this.startObs(); }
 
     /** 启用/禁用吸附：禁用时销毁全部控制器，启用时重建并扫描 */
     setEnabled(enabled: boolean) {

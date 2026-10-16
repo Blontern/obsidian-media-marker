@@ -18,6 +18,7 @@ export class TimestampManager {
     private boundEnded: (() => void) | null = null;
     private boundPause: (() => void) | null = null;
     private boundPlay: (() => void) | null = null;
+    private readonly players = new Set<CustomMediaPlayer>();
 
     constructor(
         private app: App,
@@ -294,6 +295,12 @@ export class TimestampManager {
         this.activeContainer = null;
     }
 
+    /** 插件卸载：解除全部自定义播放器包装，恢复原生媒体元素 */
+    teardown() {
+        for (const player of this.players) player.destroy();
+        this.players.clear();
+    }
+
     /** 遍历容器内的所有媒体元素并包装（阅读模式后处理器入口） */
     rewriteMediaElements(el: HTMLElement) {
         const mediaElements = el.querySelectorAll<HTMLMediaElement>("audio, video");
@@ -312,6 +319,7 @@ export class TimestampManager {
 
         const player = new CustomMediaPlayer(media, this.app);
         player.build();
+        this.players.add(player);
 
         const container = media.closest(".custom-media-player");
         if (container) {

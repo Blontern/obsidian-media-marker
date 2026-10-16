@@ -11,7 +11,7 @@ export default class TimestampPlayerPlugin extends Plugin {
     private stickyManager: StickyMediaManager;
     private timestampManager: TimestampManager;
     private mediaObserver: MutationObserver | null = null;
-    private stickyEnabled = true;
+    private stickyEnabled = false;
     private instrumentedViews = new WeakSet<MarkdownView>();
 
     async onload() {
@@ -46,6 +46,9 @@ export default class TimestampPlayerPlugin extends Plugin {
         // 兜底：监听动态插入的媒体元素（覆盖实时预览路径）
         this.setupMediaObserver();
         this.instrumentStickyToggle();
+
+        // 加载时刷新已打开的标签页，让插件立即生效
+        window.setTimeout(() => this.refreshActiveView(), 0);
     }
 
     onunload() {
@@ -53,6 +56,42 @@ export default class TimestampPlayerPlugin extends Plugin {
         this.stickyManager.destroy();
         this.mediaObserver?.disconnect();
         this.mediaObserver = null;
+
+        // 显式清理 DOM 产物（re-render 无法覆盖）：自定义播放器、吸附开关、装饰节点
+        this.timestampManager.teardown();
+        this.removeViewArtifacts();
+
+        // 延迟到 Obsidian 清理完注册项后再刷新，还原时间戳等后处理器产物
+        window.setTimeout(() => this.refreshActiveView(), 0);
+    }
+
+    /** 移除插件注入的、无法通过 re-render 回收的 DOM 产物 */
+    private removeViewArtifacts() {
+        const root = this.app.workspace.containerEl;
+
+        root.querySelectorAll<HTMLElement>("[data-tsp-sticky-toggle]").forEach(el => el.remove());
+        root.querySelectorAll<HTMLElement>(
+            ".tsp-sticky-anchor, .tsp-sticky-placeholder, .tsp-sticky-media-layer"
+        ).forEach(el => el.remove());
+        root.querySelectorAll<HTMLElement>(".tsp-sticky-host-context")
+            .forEach(el => el.removeClass("tsp-sticky-host-context"));
+
+        // 阅读模式的时间戳 / 说话人节点还原为纯文本；实时预览的由 CM 扩展回收，跳过
+        root.querySelectorAll<HTMLElement>(".tsp-timestamp, .tsp-speaker").forEach(el => {
+            if (el.closest(".cm-content")) return;
+            el.replaceWith(el.ownerDocument.createTextNode(el.textContent ?? ""));
+        });
+    }
+
+    /** 刷新当前激活的 markdown 标签页（阅读模式 / 实时预览均覆盖） */
+    private refreshActiveView() {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view || !view.file) return;
+        if (view.getMode() === "preview") {
+            view.previewMode.rerender(true);
+        } else {
+            view.editor?.refresh();
+        }
     }
 
     private setupMediaObserver() {
