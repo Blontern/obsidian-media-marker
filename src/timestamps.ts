@@ -1,8 +1,8 @@
 import { App, MarkdownView, setIcon } from "obsidian";
 import { StickyMediaManager } from "./sticky-media";
 import { CustomMediaPlayer } from "./custom-player";
-import { parseTimestamp, createInlineTsRegex } from "./utils/time";
-import { buildTimestampButton } from "./utils/ts-button";
+import { parseTimestamp, createInlineTsRegex, createLoopRangeRegex } from "./utils/time";
+import { buildTimestampButton, buildLoopButton } from "./utils/ts-button";
 
 const SPEAKER_LINE_RE = /^(.+?)\s+((?:(?:\d{1,3}:)?\d{1,3}:\d{2}(?:\.\d{1,3})?))\s*$/;
 const INLINE_TS_RE = createInlineTsRegex();
@@ -14,6 +14,8 @@ export class TimestampManager {
     private activeBtn: HTMLElement | null = null;
     private activeMedia: HTMLMediaElement | null = null;
     private activeContainer: HTMLElement | null = null;
+    /** 当前激活的循环区间（全插件同时只允许一个） */
+    private activeLoop: { media: HTMLMediaElement; start: number; end: number; btn: HTMLElement } | null = null;
     private boundTimeUpdate: (() => void) | null = null;
     private boundEnded: (() => void) | null = null;
     private boundPause: (() => void) | null = null;
@@ -49,6 +51,38 @@ export class TimestampManager {
         }
     }
 
+    /** 阅读模式：把 `[loop]start->end` 渲染为可点击按钮 */
+    processLoopTimestamps(el: HTMLElement) {
+        for (const node of this.collectTextNodes(el).reverse()) {
+            const text = node.textContent ?? "";
+            const regex = createLoopRangeRegex();
+            const fragment = createFragment();
+            let lastIndex = 0;
+            let m: RegExpExecArray | null;
+
+            while ((m = regex.exec(text)) !== null) {
+                if (m.index > lastIndex) {
+                    fragment.appendChild(node.ownerDocument.createTextNode(text.slice(lastIndex, m.index)));
+                }
+                const rangeStr = `${m[1]}->${m[2]}`;
+                const start = parseTimestamp(m[1]);
+                const end = parseTimestamp(m[2]);
+                fragment.appendChild(buildLoopButton(rangeStr, start, end, (btn, e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.toggleLoop(btn, start, end);
+                }));
+                lastIndex = m.index + m[0].length;
+            }
+
+            if (lastIndex === 0) continue;
+            if (lastIndex < text.length) {
+                fragment.appendChild(node.ownerDocument.createTextNode(text.slice(lastIndex)));
+            }
+            node.parentNode?.replaceChild(fragment, node);
+        }
+    }
+
     /** 递归收集元素下的文本节点，跳过语义元素和自身产物 */
     private collectTextNodes(el: HTMLElement): Text[] {
         const result: Text[] = [];
@@ -61,7 +95,10 @@ export class TimestampManager {
                     e.classList.contains("tsp-timestamp") ||
                     e.classList.contains("tsp-speaker") ||
                     e.classList.contains("tsp-play-icon") ||
-                    e.classList.contains("tsp-time")
+                    e.classList.contains("tsp-time") ||
+                    e.classList.contains("tsp-loop-timestamp") ||
+                    e.classList.contains("tsp-loop-icon") ||
+                    e.classList.contains("tsp-loop-time")
                 ) return;
             }
             if (node.nodeType === Node.TEXT_NODE) {
@@ -141,6 +178,9 @@ export class TimestampManager {
     }
 
     public togglePlay(btn: HTMLElement, seconds: number) {
+        // 普通时间戳跳转与循环播放互斥
+        this.stopLoop();
+
         if (this.activeBtn === btn && this.activeMedia) {
             if (this.activeMedia.paused) {
                 this.activeMedia.play().catch(() => {});
@@ -154,7 +194,7 @@ export class TimestampManager {
         if (!view) return;
 
         const container = view.containerEl;
-        const media = this.findMediaForBtn(container, btn);
+        const media = this.findMediaForElement(container, btn);
         if (!media) return;
 
         this.activateMedia(media, container);
@@ -165,11 +205,73 @@ export class TimestampManager {
         this.setActiveBtn(btn);
     }
 
-    private findMediaForBtn(container: HTMLElement, btn: HTMLElement): HTMLMediaElement | null {
+    /**
+     * 切换循环播放区间。点击同一区间会停止循环；点击其他区间会替换当前循环。
+     */
+    public toggleLoop(btn: HTMLElement, start: number, end: number) {
+        const [from, to] = start <= end ? [start, end] : [end, start];
+        if (to <= from) return;
+
+        // 以按钮所在的视图为准，兼容分屏 / 非激活窗格
+        const container = btn.closest<HTMLElement>(".markdown-source-view, .markdown-reading-view")
+            ?? this.app.workspace.getActiveViewOfType(MarkdownView)?.containerEl;
+        if (!container) return;
+
+        const media = this.findMediaForElement(container, btn);
+        if (!media) return;
+
+        const loop = this.activeLoop;
+        if (loop && loop.media === media && loop.start === from && loop.end === to) {
+            this.stopLoop();
+            return;
+        }
+
+        this.stopLoop();
+        this.activateMedia(media, container);
+
+        this.activeLoop = { media, start: from, end: to, btn };
+        btn.addClass("tsp-loop-active");
+        btn.setAttribute("aria-pressed", "true");
+
+        media.currentTime = Math.min(from, media.duration || Infinity);
+        media.play().catch(() => {});
+    }
+
+    /** 当前是否有与给定区间相同的循环按钮处于激活状态 */
+    public isLoopActive(start: number, end: number): boolean {
+        const loop = this.activeLoop;
+        if (!loop) return false;
+        const [from, to] = start <= end ? [start, end] : [end, start];
+        return loop.start === from && loop.end === to;
+    }
+
+    private stopLoop() {
+        const loop = this.activeLoop;
+        if (!loop) return;
+
+        // 装饰节点可能已被 CodeMirror 重建，按文档清理所有激活态
+        loop.btn.ownerDocument.querySelectorAll<HTMLElement>(".tsp-loop-timestamp.tsp-loop-active")
+            .forEach(el => {
+                el.removeClass("tsp-loop-active");
+                el.setAttribute("aria-pressed", "false");
+            });
+
+        this.activeLoop = null;
+    }
+
+    /** 查找位于目标元素之前、且距离最近的媒体（兼容吸附 anchor） */
+    private findMediaForElement(container: HTMLElement, target: HTMLElement): HTMLMediaElement | null {
         const all = container.querySelectorAll<HTMLElement>(MEDIA_SECTION_SELECTOR);
         let lastMedia: HTMLMediaElement | null = null;
 
         for (const el of Array.from(all)) {
+            if (el === target) break;
+
+            // 只考虑文档顺序位于 target 之前的元素
+            const rel = target.compareDocumentPosition(el);
+            if (rel & Node.DOCUMENT_POSITION_FOLLOWING) break;
+            if (!(rel & Node.DOCUMENT_POSITION_PRECEDING)) continue;
+
             if (el.tagName === "AUDIO" || el.tagName === "VIDEO") {
                 const media = el as HTMLMediaElement;
                 if (!this.stickyManager.getAnchorForMedia(media)) {
@@ -179,9 +281,6 @@ export class TimestampManager {
             else if (el.classList.contains("tsp-sticky-anchor")) {
                 const media = this.stickyManager.getMediaForAnchor(el);
                 if (media) lastMedia = media;
-            }
-            else if (el === btn) {
-                return lastMedia;
             }
         }
         return lastMedia;
@@ -236,6 +335,14 @@ export class TimestampManager {
 
     private onTimeUpdate() {
         if (!this.activeMedia || !this.activeContainer) return;
+
+        // 循环区间优先：到达终点后回到起点
+        if (this.activeLoop && this.activeLoop.media === this.activeMedia) {
+            if (this.activeMedia.currentTime >= this.activeLoop.end) {
+                this.activeMedia.currentTime = this.activeLoop.start;
+            }
+        }
+
         const target = this.findActiveTimestamp(this.activeContainer, this.activeMedia);
         if (target && target !== this.activeBtn) {
             this.setActiveBtn(target);
@@ -280,7 +387,15 @@ export class TimestampManager {
 
     private bindMediaListeners(media: HTMLMediaElement) {
         this.boundTimeUpdate = () => this.onTimeUpdate();
-        this.boundEnded = () => this.clearPlaybackState();
+        this.boundEnded = () => {
+            // 循环区间包含媒体结尾时，直接回到起点继续播放
+            if (this.activeLoop && this.activeMedia && this.activeLoop.media === this.activeMedia) {
+                this.activeMedia.currentTime = this.activeLoop.start;
+                this.activeMedia.play().catch(() => {});
+                return;
+            }
+            this.clearPlaybackState();
+        };
         this.boundPause = () => this.setPlayIcon("play");
         this.boundPlay = () => this.setPlayIcon("pause");
         media.addEventListener("timeupdate", this.boundTimeUpdate);
@@ -290,6 +405,7 @@ export class TimestampManager {
     }
 
     clearPlaybackState() {
+        this.stopLoop();
         this.releaseCurrentMedia();
         this.activeMedia = null;
         this.activeContainer = null;
@@ -297,6 +413,7 @@ export class TimestampManager {
 
     /** 插件卸载：解除全部自定义播放器包装，恢复原生媒体元素 */
     teardown() {
+        this.stopLoop();
         for (const player of this.players) player.destroy();
         this.players.clear();
     }
@@ -334,6 +451,8 @@ export class TimestampManager {
     }
 
     private activateMedia(media: HTMLMediaElement, container: HTMLElement | null) {
+        // 切换媒体时结束旧循环，同一媒体内则由调用方决定是否保留
+        if (this.activeLoop && this.activeLoop.media !== media) this.stopLoop();
         this.releaseCurrentMedia();
 
         if (this.activeMedia && this.activeMedia !== media && !this.activeMedia.paused) {

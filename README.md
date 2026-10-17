@@ -10,6 +10,10 @@ Click timestamps in transcription documents to seek and play the embedded audio/
 
 In your notes, timestamp-formatted text `[HH:]mm:ss[.SSS]` written below a video is rendered as buttons. Click one to jump the associated media to that position and start playing. During playback, the current timestamp is highlighted, and its icon toggles between play/pause with the playback state.
 
+## Loop Timestamps
+
+Write `[loop]StartTimestamp -> EndTimestamp` in a note, then click the rendered range to loop that segment. The `loop` identifier is case-insensitive, and spaces inside the expression are ignored as long as everything stays on a single line (for example, `[LoOp] 00:10     -> 00:20` works the same). Only one loop can be active at a time; clicking the active range again stops looping. Loop ranges are not treated as regular timestamps.
+
 ## Custom Media Player
 
 Embedded `audio` and `video` are replaced with a custom control bar: play/pause, seekable progress bar with hover tooltip, volume slider, playback speed menu (`0.5x` – `2x`), subtitle toggle, picture-in-picture and fullscreen (video), and a settings menu.

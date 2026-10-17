@@ -38,6 +38,46 @@
     font-family: var(--font-monospace);
 }
 
+/* 循环播放区间 */
+.tsp-loop-timestamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    padding: 1px 6px;
+    border: 1px dashed var(--background-modifier-border);
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    transition: all 0.15s ease;
+    vertical-align: baseline;
+    user-select: none;
+}
+
+.tsp-loop-timestamp:hover,
+.tsp-loop-timestamp.tsp-loop-active {
+    color: var(--text-accent);
+    border-color: var(--text-accent);
+    background-color: var(--background-modifier-hover);
+}
+
+.tsp-loop-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+}
+
+.tsp-loop-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.tsp-loop-time {
+    font-family: var(--font-monospace);
+}
+
 /* 媒体吸附 */
 .tsp-sticky-host-context {
     position: relative;

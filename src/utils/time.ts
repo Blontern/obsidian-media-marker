@@ -18,6 +18,14 @@ export function createInlineTsRegex(): RegExp {
     return /(?:(?:(\d{1,3}):)?(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?)/g;
 }
 
+/**
+ * 创建循环播放区间的正则（`[loop]` + 两个时间戳 + `->`）。
+ * 每次调用返回独立实例，避免 lastIndex 相互污染。
+ */
+export function createLoopRangeRegex(): RegExp {
+    return /\[loop\][ \t]*((?:(?:\d{1,3}):)?\d{1,3}:\d{2}(?:\.\d{1,3})?)[ \t]*->[ \t]*((?:(?:\d{1,3}):)?\d{1,3}:\d{2}(?:\.\d{1,3})?)/gi;
+}
+
 /** 解析 "MM:SS(.mmm)" / "H:MM:SS(.mmm)" 形式的时间字符串为秒 */
 export function parseTimestamp(s: string): number {
     const m = s.trim().match(TS_FULL_RE);

@@ -25,6 +25,7 @@ export default class TimestampPlayerPlugin extends Plugin {
         this.registerMarkdownPostProcessor(
             async (el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
                 if (!(await this.hasMediaEmbed(ctx))) return;
+                this.timestampManager.processLoopTimestamps(el);
                 this.timestampManager.processTimestamps(el);
                 this.timestampManager.rewriteMediaElements(el);
                 this.stickyManager.setupForElement(el);
@@ -33,7 +34,7 @@ export default class TimestampPlayerPlugin extends Plugin {
 
         // 实时预览的时间戳渲染
         this.registerEditorExtension(
-            createLivePreviewTimestampExtension(this.app, this.timestampManager)
+            createLivePreviewTimestampExtension(this.timestampManager)
         );
 
         this.registerEvent(
@@ -76,8 +77,8 @@ export default class TimestampPlayerPlugin extends Plugin {
         root.querySelectorAll<HTMLElement>(".tsp-sticky-host-context")
             .forEach(el => el.removeClass("tsp-sticky-host-context"));
 
-        // 阅读模式的时间戳 / 说话人节点还原为纯文本；实时预览的由 CM 扩展回收，跳过
-        root.querySelectorAll<HTMLElement>(".tsp-timestamp, .tsp-speaker").forEach(el => {
+        // 阅读模式的时间戳 / 说话人 / 循环区间节点还原为纯文本；实时预览的由 CM 扩展回收，跳过
+        root.querySelectorAll<HTMLElement>(".tsp-timestamp, .tsp-speaker, .tsp-loop-timestamp").forEach(el => {
             if (el.closest(".cm-content")) return;
             el.replaceWith(el.ownerDocument.createTextNode(el.textContent ?? ""));
         });
