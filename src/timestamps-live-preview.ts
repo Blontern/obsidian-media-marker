@@ -41,9 +41,8 @@ export function createLivePreviewTimestampExtension(app: App, manager: Timestamp
         decorate: (add, from, to, match, view) => {
             const cursor = view.state.selection.main;
 
-            // 光标所在整行回退为源码
-            const line = view.state.doc.lineAt(from);
-            if (cursor.from <= line.to && cursor.to >= line.from) return;
+            // 光标落入时间戳范围内时回退为源码
+            if (cursor.from <= to && cursor.to >= from) return;
 
             const timeStr = match[0];
             const totalSeconds = parseTimestamp(timeStr);
@@ -54,29 +53,21 @@ export function createLivePreviewTimestampExtension(app: App, manager: Timestamp
         },
     });
 
-    const cursorLine = (view: EditorView): number =>
-        view.state.doc.lineAt(view.state.selection.main.head).number;
-
     return Prec.high(ViewPlugin.fromClass(
         class {
             decorations: DecorationSet;
-            private lastCursorLine: number;
 
             constructor(view: EditorView) {
                 this.decorations = matcher.createDeco(view);
-                this.lastCursorLine = cursorLine(view);
             }
 
             update(update: ViewUpdate) {
-                const newCursorLine = cursorLine(update.view);
-
                 if (
                     update.docChanged ||
                     update.viewportChanged ||
-                    newCursorLine !== this.lastCursorLine
+                    update.selectionSet
                 ) {
                     this.decorations = matcher.createDeco(update.view);
-                    this.lastCursorLine = newCursorLine;
                 }
             }
         },
